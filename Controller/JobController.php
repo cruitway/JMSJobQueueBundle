@@ -5,7 +5,7 @@ namespace JMS\JobQueueBundle\Controller;
 use Doctrine\Common\Util\ClassUtils;
 use JMS\DiExtraBundle\Annotation as DI;
 use JMS\JobQueueBundle\Entity\Job;
-use Pagerfanta\Adapter\DoctrineORMAdapter;
+use Pagerfanta\Adapter\FixedAdapter;
 use Pagerfanta\Pagerfanta;
 use Pagerfanta\View\TwitterBootstrapView;
 use Sensio\Bundle\FrameworkExtraBundle\Configuration\Route;
@@ -33,22 +33,16 @@ class JobController
      */
     public function overviewAction()
     {
+        $page = max(1, (integer) $this->request->query->get('page', 1));
+        $perPage = max(5, min(50, (integer) $this->request->query->get('per_page', 20)));
+
         $lastJobsWithError = $this->getRepo()->findLastJobsWithError(5);
+        $totalJobCount = $this->getRepo()->getTotalJobCount() - count($lastJobsWithError);
+        $jobs = $this->getRepo()->getJobsPaginated($page-1, $perPage, $lastJobsWithError);
 
-        $qb = $this->getEm()->createQueryBuilder();
-        $qb->select('j')->from('JMSJobQueueBundle:Job', 'j')
-                ->where($qb->expr()->isNull('j.originalJob'))
-                ->orderBy('j.id', 'desc');
-
-        foreach ($lastJobsWithError as $i => $job) {
-            $qb->andWhere($qb->expr()->neq('j.id', '?'.$i));
-            $qb->setParameter($i, $job->getId());
-        }
-
-        $pager = new Pagerfanta(new DoctrineORMAdapter($qb));
-        $pager->setCurrentPage(max(1, (integer) $this->request->query->get('page', 1)));
-        $pager->setMaxPerPage(max(5, min(50, (integer) $this->request->query->get('per_page', 20))));
-
+        $pager = new Pagerfanta(new FixedAdapter($totalJobCount, $jobs));
+        $pager->setCurrentPage($page);
+        $pager->setMaxPerPage($perPage);
         $pagerView = new TwitterBootstrapView();
         $router = $this->router;
         $routeGenerator = function($page) use ($router, $pager) {

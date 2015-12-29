@@ -447,4 +447,29 @@ class JobRepository extends EntityRepository
 
         return count($result);
     }
+
+    public function getTotalJobCount()
+    {
+        $qb = $this->_em->createQueryBuilder();
+        $qb->select('count(j.id)')->from('JMSJobQueueBundle:Job', 'j');
+
+        return $qb->getQuery()->getSingleScalarResult();
+    }
+
+    public function getJobsPaginated($page, $perPage, $excludeIds)
+    {
+        $qb = $this->_em->createQueryBuilder();
+        $qb->select('j')->from('JMSJobQueueBundle:Job', 'j')
+            ->where($qb->expr()->isNull('j.originalJob'))
+            ->orderBy('j.id', 'desc')
+            ->setMaxResults($perPage)
+            ->setFirstResult($page * $perPage);
+
+        if (count($excludeIds)) {
+            $qb->andWhere('j.id NOT IN (:excludeIds)')
+                ->setParameter('excludeIds', $excludeIds);
+        }
+
+        return $qb->getQuery()->getResult();
+    }
 }
